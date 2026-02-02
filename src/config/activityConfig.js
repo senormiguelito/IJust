@@ -74,7 +74,12 @@ export const activityConfig = {
         min: 1,
         max: 10,
         step: 1,
-        defaultValue: 5
+        defaultValue: 5,
+        conditional: {
+          field: 'cardioType',
+          value: 'Jump Rope',
+          negate: true // Show when cardioType is NOT Jump Rope
+        }
       },
       // Conditional fields for Run (inside Cardio)
       {
@@ -172,11 +177,12 @@ export const activityConfig = {
       },
       // Conditional fields for Jump Rope
       {
-        name: 'jumpRopeSkips',
-        label: 'Number of Skips',
-        type: 'number',
-        required: true,
-        placeholder: '500',
+        name: 'jumpRopeTrackingMode',
+        label: 'Tracking Mode',
+        type: 'toggle',
+        required: false,
+        options: ['Track by Time', 'Track by Skips'],
+        defaultValue: 'Track by Time',
         conditional: {
           field: 'cardioType',
           value: 'Jump Rope'
@@ -184,13 +190,24 @@ export const activityConfig = {
       },
       {
         name: 'jumpRopeTimeMinutes',
-        label: 'Time (Minutes)',
+        label: 'Time (minutes)',
         type: 'number',
         required: true,
         placeholder: '10',
         conditional: {
-          field: 'cardioType',
-          value: 'Jump Rope'
+          field: 'jumpRopeTrackingMode',
+          value: 'Track by Time'
+        }
+      },
+      {
+        name: 'jumpRopeSkips',
+        label: 'Number of Skips',
+        type: 'number',
+        required: true,
+        placeholder: '500',
+        conditional: {
+          field: 'jumpRopeTrackingMode',
+          value: 'Track by Skips'
         }
       },
       {
@@ -206,10 +223,25 @@ export const activityConfig = {
       },
       {
         name: 'jumpRopeWeight',
-        label: 'Rope Weight (lbs)',
+        label: 'Rope Weight',
         type: 'number',
         required: true,
-        placeholder: '3',
+        placeholder: '2',
+        min: 0,
+        max: 20,
+        defaultValue: 2,
+        conditional: {
+          field: 'jumpRopeWeighted',
+          value: true
+        }
+      },
+      {
+        name: 'jumpRopeWeightUnit',
+        label: 'Weight Unit',
+        type: 'toggle',
+        required: false,
+        options: ['lbs', 'kg'],
+        defaultValue: 'lbs',
         conditional: {
           field: 'jumpRopeWeighted',
           value: true
@@ -397,7 +429,16 @@ export const activityConfig = {
           if (cardioType === 'Run') {
             timeInMinutes = parseFloat(formData.runTimeMinutes || 0);
           } else if (cardioType === 'Jump Rope') {
-            timeInMinutes = parseFloat(formData.jumpRopeTimeMinutes || 0);
+            // Mode-based calculation
+            const trackingMode = formData.jumpRopeTrackingMode || 'Track by Time';
+            
+            if (trackingMode === 'Track by Time') {
+              timeInMinutes = parseFloat(formData.jumpRopeTimeMinutes || 0);
+            } else {
+              // Track by Skips: Auto-calculate time (assume 100 skips/min)
+              const skips = parseFloat(formData.jumpRopeSkips || 0);
+              timeInMinutes = skips / 100;
+            }
           } else if (cardioType === 'Cycling') {
             timeInMinutes = parseFloat(formData.cyclingTimeMinutes || 0);
           } else if (cardioType === 'Swimming') {
@@ -419,9 +460,19 @@ export const activityConfig = {
             bodyWeightKg = formData.bodyWeightUnit === 'kg' ? weight : weight * 0.453592;
           }
           
-          // Calculate calories: MET * weight(kg) * time(hours)
+          // Calculate base calories: MET * weight(kg) * time(hours)
           const timeInHours = timeInMinutes / 60;
-          const calories = met * bodyWeightKg * timeInHours;
+          let calories = met * bodyWeightKg * timeInHours;
+          
+          // Jump Rope: Apply weighted rope multiplier
+          if (cardioType === 'Jump Rope' && formData.jumpRopeWeighted) {
+            const ropeWeight = parseFloat(formData.jumpRopeWeight || 2);
+            const ropeWeightUnit = formData.jumpRopeWeightUnit || 'lbs';
+            const ropeWeightInLbs = ropeWeightUnit === 'kg' ? ropeWeight * 2.20462 : ropeWeight;
+            
+            // Multiply by (1 + ropeWeightInLbs * 0.1)
+            calories = calories * (1 + (ropeWeightInLbs * 0.1));
+          }
           
           return Math.round(calories) + ' cal';
         }
@@ -556,26 +607,69 @@ export const activityConfig = {
     colorLight: 'bg-purple-100',
     colorText: 'text-purple-600',
     fields: [
+      // Global Body Weight Section
       {
-        name: 'techniques',
-        label: 'Techniques',
-        type: 'tags',
+        name: 'bodyWeight',
+        label: 'Body Weight',
+        type: 'number',
         required: false,
-        placeholder: 'Press Enter to add technique'
+        placeholder: '160',
+        defaultValue: 160
       },
       {
-        name: 'partners',
-        label: 'Partners',
-        type: 'tags',
+        name: 'bodyWeightUnit',
+        label: 'Weight Unit',
+        type: 'toggle',
         required: false,
-        placeholder: 'Press Enter to add partner'
+        options: ['lbs', 'kg'],
+        defaultValue: 'lbs'
+      },
+      {
+        name: 'duration',
+        label: 'Duration (minutes)',
+        type: 'number',
+        required: true,
+        placeholder: '90'
       },
       {
         name: 'instructor',
         label: 'Instructor',
-        type: 'text',
+        type: 'creatable-select',
         required: false,
-        placeholder: 'Instructor name'
+        placeholder: 'Select or add instructor',
+        storageKey: 'ijust_instructors' // For LocalStorage
+      },
+      {
+        name: 'classQuality',
+        label: 'Class Quality',
+        type: 'slider',
+        required: false,
+        min: 1,
+        max: 10,
+        step: 1,
+        defaultValue: 7
+      },
+      {
+        name: 'drillingPartners',
+        label: 'Drilling Partner(s)',
+        type: 'drilling-partners',
+        required: false,
+        placeholder: 'Add drilling partner'
+      },
+      {
+        name: 'techniques',
+        label: 'Techniques',
+        type: 'technique-list',
+        required: false,
+        placeholder: 'Add technique'
+      },
+      {
+        name: 'sparringRounds',
+        label: 'Sparring Rounds',
+        type: 'sparring-rounds',
+        required: false,
+        placeholder: 'Add sparring partner',
+        maxItems: 15
       },
       {
         name: 'reflection',
@@ -760,4 +854,14 @@ export const getAllActivities = () => {
 
 export const getRecoveryAdvice = (workoutType) => {
   return recoveryResources[workoutType] || null;
+};
+
+// Get default social context settings based on activity type
+export const getDefaultSocialContext = (activityId) => {
+  // Jiu-Jitsu defaults to social (isSolo = false)
+  if (activityId === 'jiujitsu') {
+    return { isSolo: false, participants: [] };
+  }
+  // All other activities default to solo (isSolo = true)
+  return { isSolo: true, participants: [] };
 };

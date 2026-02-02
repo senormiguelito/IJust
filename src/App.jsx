@@ -4,12 +4,13 @@ import ActivitySelector from './components/ActivitySelector';
 import GenericForm from './components/GenericForm';
 import LogCard from './components/LogCard';
 import { getActivityConfig } from './config/activityConfig';
-import { loadLogs, addLog, deleteLog } from './utils/storage';
+import { loadLogs, addLog, deleteLog, updateLog } from './utils/storage';
 
 function App() {
   const [logs, setLogs] = useState([]);
   const [showActivitySelector, setShowActivitySelector] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState(null);
+  const [editingLog, setEditingLog] = useState(null);
 
   // Load logs from localStorage on mount
   useEffect(() => {
@@ -22,15 +23,24 @@ function App() {
     setShowActivitySelector(false);
   };
 
-  const handleFormSubmit = (formData) => {
-    const newLog = addLog(formData);
-    setLogs((prev) => [newLog, ...prev]);
+  const handleFormSubmit = (formData, isEdit = false) => {
+    if (isEdit) {
+      // Update existing log
+      const updatedLogs = updateLog(formData.id, formData);
+      setLogs(updatedLogs);
+      setEditingLog(null);
+    } else {
+      // Add new log
+      const newLog = addLog(formData);
+      setLogs((prev) => [newLog, ...prev]);
+    }
     setSelectedActivity(null);
   };
 
   const handleFormCancel = () => {
     setSelectedActivity(null);
     setShowActivitySelector(false);
+    setEditingLog(null);
   };
 
   const handleDeleteLog = (logId) => {
@@ -38,6 +48,11 @@ function App() {
       const updatedLogs = deleteLog(logId);
       setLogs(updatedLogs);
     }
+  };
+
+  const handleEditLog = (log) => {
+    setEditingLog(log);
+    setSelectedActivity(log.activityType);
   };
 
   const handleNewLog = () => {
@@ -71,7 +86,7 @@ function App() {
         ) : (
           <div className="space-y-4">
             {logs.map((log) => (
-              <LogCard key={log.id} log={log} onDelete={handleDeleteLog} />
+              <LogCard key={log.id} log={log} onDelete={handleDeleteLog} onEdit={handleEditLog} />
             ))}
           </div>
         )}
@@ -102,6 +117,7 @@ function App() {
               activityConfig={getActivityConfig(selectedActivity)}
               onSubmit={handleFormSubmit}
               onCancel={handleFormCancel}
+              editingLog={editingLog}
             />
           )}
         </div>
